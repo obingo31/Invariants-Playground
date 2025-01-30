@@ -1,0 +1,26 @@
+[
+ {
+  "call": {
+   "from": "0x0000000000000000000000000000000000010000",
+   "to": "0xa647ff3c36cfab592509e13860ab8c4f28781a66",
+   "nonce": 0,
+   "value": "0x0",
+   "gasLimit": 12500000,
+   "gasPrice": "0x1",
+   "gasFeeCap": "0x0",
+   "gasTipCap": "0x0",
+   "data": "0x035721f000000000000000000000000000000000000000000000000000000000000000b90000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000003dfd7a72c8e2dc9d011682eddbc1b16cb228bbeacaa24c52c04262d5b6aa60d6c5a4fe5cfbe36e0cc47e5dcaeaeb10cf6eb22cee3e7ff5c998aed8d4e03b000000",
+   "dataAbiValues": {
+    "methodSignature": "createProposal(uint8,string)",
+    "inputValues": [
+     "185",
+     "\ufffdzr\ufffd\ufffdܝ\u0001\u0016\ufffd\ufffd\ufffd\ufffd\ufffdl\ufffd(\ufffd\ufffdʢLR\ufffdBbն\ufffd`\ufffdŤ\ufffd\\\ufffd\ufffdn\f\ufffd~]\ufffd\ufffd\ufffd\u0010\ufffdn\ufffd,\ufffd\u003e\ufffdɘ\ufffd\ufffd\ufffd\ufffd;"
+    ]
+   },
+   "AccessList": null,
+   "SkipAccountChecks": false
+  },
+  "blockNumberDelay": 25919,
+  "blockTimestampDelay": 86400
+ }
+]

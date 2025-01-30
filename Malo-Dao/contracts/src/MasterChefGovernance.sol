@@ -9,9 +9,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20VotesUpg
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import "../Interfaces/IStakeManager.sol";
 import "../Interfaces/IMasterChefGovernance.sol";
-import "../Interfaces/IProposalExecutor.sol";
+import "../Interfaces/IStakeManager.sol";
 import "../Interfaces/IWarpMessenger.sol";
 import "../Interfaces/IGovernanceNFT.sol";
 
@@ -26,7 +25,6 @@ contract MasterChefGovernance is
     ReentrancyGuardUpgradeable,
     IMasterChefGovernance
 {
-    // Struct Definitions
     struct ConvictionParams {
         uint64 maxConviction;
         uint64 halfLifeSeconds;
@@ -39,40 +37,24 @@ contract MasterChefGovernance is
         uint64 maxCreditsPerVoter;
     }
 
-    // State Variables
     IStakeManager public stakeManager;
     IWarpMessenger public warpMessenger;
     IGovernanceNFT public governanceNFT;
 
     uint256 public proposalCount;
-    uint256 public stakingPool;
+    uint256 public minQuorum;
+    mapping(uint256 => Proposal) public proposals;
+    mapping(address => mapping(uint256 => bool)) public hasVoted;
     mapping(address => uint256) public stakingBalance;
     mapping(address => uint256) public stakingTimestamp;
-    mapping(address => uint256) public voterRewards;
-    mapping(bytes32 => bool) public executedCrossChainProposals;
-    mapping(uint256 => Proposal) public proposals;
-    mapping(uint256 => address) public trustedWarpChains;
-    mapping(address => bool) public rewardNFTs;
-    mapping(address => mapping(uint256 => bool)) public hasVoted;
-
-    ConvictionParams public convictionParams;
-    QuadraticParams public quadraticParams;
-
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+    
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-    bytes32 public constant REWARD_DISTRIBUTOR_ROLE = keccak256("REWARD_DISTRIBUTOR_ROLE");
-
-    // Events
+    
     event ProposalCreated(uint256 indexed proposalId, address indexed proposer, ProposalType indexed proposalType);
     event ProposalExecuted(uint256 indexed proposalId);
-    event WarpMessageReceived(uint256 indexed warpChainId, uint256 indexed proposalId);
+    event VoteCast(address indexed voter, uint256 indexed proposalId, uint256 weight);
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount, uint256 rewards);
-    event GovernanceNFTMinted(address indexed user, uint256 indexed proposalId);
-    event ContractUpgraded(address indexed newImplementation);
-
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() initializer {}
 
     function initialize(
         address _stakeManager,
@@ -90,30 +72,6 @@ contract MasterChefGovernance is
         stakeManager = IStakeManager(_stakeManager);
         warpMessenger = IWarpMessenger(_warpMessenger);
         governanceNFT = IGovernanceNFT(_governanceNFT);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(EXECUTOR_ROLE, msg.sender);
-        _grantRole(REWARD_DISTRIBUTOR_ROLE, msg.sender);
-
-        _setupInitialGovernance();
-    }
-
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {
-        emit ContractUpgraded(newImplementation);
-    }
-
-    function _setupInitialGovernance() private {
-        convictionParams = ConvictionParams({
-            maxConviction: 10000,
-            halfLifeSeconds: 7 days,
-            minStakeTime: 2 days
-        });
-
-        quadraticParams = QuadraticParams({
-            baseCredits: 100,
-            creditPrice: 1 * 10**18,
-            maxCreditsPerVoter: 10000
-        });
     }
 
     function _update(address from, address to, uint256 value)
@@ -132,95 +90,40 @@ contract MasterChefGovernance is
         return super.nonces(owner);
     }
 
-    function stake(uint256 amount) external nonReentrant whenNotPaused {
-        require(amount > 0, "Amount must be greater than 0");
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(EXECUTOR_ROLE) {}
+
+    function vote(uint256 proposalId, uint256 amount) external {
+        require(!hasVoted[msg.sender][proposalId], "Already voted");
         require(balanceOf(msg.sender) >= amount, "Insufficient balance");
-
-        _transfer(msg.sender, address(this), amount);
-        stakingBalance[msg.sender] += amount;
-        stakingTimestamp[msg.sender] = block.timestamp;
-        stakingPool += amount;
-
-        emit Staked(msg.sender, amount);
-    }
-
-    function unstake() external nonReentrant whenNotPaused {
-        uint256 stakedAmount = stakingBalance[msg.sender];
-        require(stakedAmount > 0, "No staked balance");
-
-        uint256 stakedTime = block.timestamp - stakingTimestamp[msg.sender];
-        require(stakedTime >= convictionParams.minStakeTime, "Stake not mature");
-
-        uint256 rewards = calculateRewards(msg.sender);
-        stakingBalance[msg.sender] = 0;
-        stakingTimestamp[msg.sender] = 0;
-        stakingPool -= stakedAmount;
-
-        _transfer(address(this), msg.sender, stakedAmount + rewards);
-
-        emit Unstaked(msg.sender, stakedAmount, rewards);
-    }
-
-    function calculateRewards(address user) public view returns (uint256) {
-        uint256 stakedTime = block.timestamp - stakingTimestamp[user];
-        return (stakingBalance[user] * stakedTime) / 1 days;
-    }
-
-    function createProposal(ProposalType proposalType, string calldata ipfsHash) external {
-        proposalCount++;
-        proposals[proposalCount] = Proposal({
-            id: proposalCount,
-            proposer: msg.sender,
-            proposalType: proposalType,
-            startTime: uint64(block.timestamp),
-            endTime: uint64(block.timestamp + 7 days),
-            convictionGrowthRate: 1000,
-            totalConviction: 0,
-            totalQuadraticVotes: 0,
-            executed: false,
-            ipfsHash: ipfsHash
-        });
-
-        emit ProposalCreated(proposalCount, msg.sender, proposalType);
+        
+        Proposal storage proposal = proposals[proposalId];
+        require(block.timestamp >= proposal.startTime && block.timestamp <= proposal.endTime, "Voting period over");
+        
+        uint256 quadraticVoteWeight = sqrt(amount);
+        proposal.totalConviction += uint256(amount);
+        proposal.totalQuadraticVotes += uint256(quadraticVoteWeight);
+        hasVoted[msg.sender][proposalId] = true;
+        
+        emit VoteCast(msg.sender, proposalId, quadraticVoteWeight);
     }
 
     function executeProposal(uint256 proposalId) external onlyRole(EXECUTOR_ROLE) {
         Proposal storage proposal = proposals[proposalId];
-        require(proposal.id != 0, "Invalid proposal");
         require(!proposal.executed, "Proposal already executed");
         require(block.timestamp >= proposal.endTime, "Voting period not ended");
-
+        require(proposal.totalConviction >= minQuorum, "Quorum not met");
+        
         proposal.executed = true;
         emit ProposalExecuted(proposalId);
     }
-
-    function vote(uint256 proposalId, uint256 amount) external {
-        require(stakingBalance[msg.sender] >= amount, "Insufficient staked balance");
-        require(!hasVoted[msg.sender][proposalId], "Already voted");
-
-        Proposal storage proposal = proposals[proposalId];
-        require(block.timestamp >= proposal.startTime && block.timestamp <= proposal.endTime, "Voting period over");
-
-        proposal.totalConviction += uint64(amount);
-        hasVoted[msg.sender][proposalId] = true;
-    }
-
-    function sendWarpMessage(uint256 warpChainId, uint256 proposalId) external onlyRole(EXECUTOR_ROLE) {
-        Proposal storage proposal = proposals[proposalId];
-        require(proposal.id != 0, "Invalid proposal");
-        require(!proposal.executed, "Proposal already executed");
-
-        bytes memory message = abi.encode(proposal.proposer, proposal.proposalType, proposal.ipfsHash);
-        warpMessenger.sendMessage(warpChainId, message);
-    }
-
-    function mintGovernanceNFT(address user, uint256 proposalId) external onlyRole(REWARD_DISTRIBUTOR_ROLE) {
-        require(!rewardNFTs[user], "NFT already claimed");
-        require(hasVoted[user][proposalId], "User did not vote");
-
-        governanceNFT.mint(user, proposalId);
-        rewardNFTs[user] = true;
-
-        emit GovernanceNFTMinted(user, proposalId);
+    
+    function sqrt(uint256 x) private pure returns (uint256) {
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
     }
 }

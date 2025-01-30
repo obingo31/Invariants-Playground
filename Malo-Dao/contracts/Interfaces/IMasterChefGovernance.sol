@@ -11,8 +11,8 @@ interface IMasterChefGovernance {
         uint64 startTime;
         uint64 endTime;
         uint64 convictionGrowthRate;
-        uint64 totalConviction;
-        uint64 totalQuadraticVotes;
+        uint256 totalConviction;
+        uint256 totalQuadraticVotes;
         bool executed;
         string ipfsHash;
     }
