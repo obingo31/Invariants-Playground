@@ -47,20 +47,16 @@ contract MasterChefGovernance is
     mapping(address => mapping(uint256 => bool)) public hasVoted;
     mapping(address => uint256) public stakingBalance;
     mapping(address => uint256) public stakingTimestamp;
-    
+
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-    
+
     event ProposalCreated(uint256 indexed proposalId, address indexed proposer, ProposalType indexed proposalType);
     event ProposalExecuted(uint256 indexed proposalId);
     event VoteCast(address indexed voter, uint256 indexed proposalId, uint256 weight);
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount, uint256 rewards);
 
-    function initialize(
-        address _stakeManager,
-        address _warpMessenger,
-        address _governanceNFT
-    ) public initializer {
+    function initialize(address _stakeManager, address _warpMessenger, address _governanceNFT) public initializer {
         __ERC20_init("MasterChef Token", "ML");
         __ERC20Permit_init("MasterChef Token");
         __ERC20Votes_init();
@@ -81,12 +77,7 @@ contract MasterChefGovernance is
         super._update(from, to, value);
     }
 
-    function nonces(address owner)
-        public
-        view
-        override(ERC20PermitUpgradeable, NoncesUpgradeable)
-        returns (uint256)
-    {
+    function nonces(address owner) public view override(ERC20PermitUpgradeable, NoncesUpgradeable) returns (uint256) {
         return super.nonces(owner);
     }
 
@@ -95,15 +86,15 @@ contract MasterChefGovernance is
     function vote(uint256 proposalId, uint256 amount) external {
         require(!hasVoted[msg.sender][proposalId], "Already voted");
         require(balanceOf(msg.sender) >= amount, "Insufficient balance");
-        
+
         Proposal storage proposal = proposals[proposalId];
         require(block.timestamp >= proposal.startTime && block.timestamp <= proposal.endTime, "Voting period over");
-        
+
         uint256 quadraticVoteWeight = sqrt(amount);
         proposal.totalConviction += uint256(amount);
         proposal.totalQuadraticVotes += uint256(quadraticVoteWeight);
         hasVoted[msg.sender][proposalId] = true;
-        
+
         emit VoteCast(msg.sender, proposalId, quadraticVoteWeight);
     }
 
@@ -112,11 +103,11 @@ contract MasterChefGovernance is
         require(!proposal.executed, "Proposal already executed");
         require(block.timestamp >= proposal.endTime, "Voting period not ended");
         require(proposal.totalConviction >= minQuorum, "Quorum not met");
-        
+
         proposal.executed = true;
         emit ProposalExecuted(proposalId);
     }
-    
+
     function sqrt(uint256 x) private pure returns (uint256) {
         uint256 z = (x + 1) / 2;
         uint256 y = x;

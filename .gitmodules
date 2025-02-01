@@ -7,3 +7,6 @@
 [submodule "Malo-Dao/contracts/lib/openzeppelin-contracts-upgradeable"]
 	path = Malo-Dao/contracts/lib/openzeppelin-contracts-upgradeable
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "Playground/contracts/lib/openzeppelin-contracts"]
+	path = Playground/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
