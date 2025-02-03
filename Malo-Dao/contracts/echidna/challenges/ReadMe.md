@@ -4,34 +4,7 @@ Understanding the Vulnerability: Analyze the FlashLoanReceiver contract and iden
 
 Writing an Echidna Test: Create a property to test the contract.
 
-Running Echidna: Use Echidna to uncover the vulnerability.
-
-Fixing the Vulnerability: Apply a fix and verify it with Echidna.
-
-Table of Contents
-Prerequisites
-
-Setup
-
-Understanding the Vulnerability
-
-Writing an Echidna Test
-
-Running Echidna
-
-Fixing the Vulnerability
-
-Re-running Echidna
-
-Conclusion
-
-Prerequisites
-Before starting, ensure you have the following installed:
-
-Foundry: Install Foundry by following the instructions at Foundry Installation Guide.
-
-Echidna: Install Echidna by following the instructions at Echidna Installation Guide.
-
+## Use Echidna to uncover the vulnerability.
 
 ## The FlashLoanReceiver contract is vulnerable because:
 
@@ -41,7 +14,7 @@ The receiver pays the fee unconditionally, regardless of who initiated the flash
 
 This allows an attacker to repeatedly call pool.flashLoan(address(receiver), 0) to drain the receiver's balance.
 
-Original Contract
+
 ```solidity
 
 // SPDX-License-Identifier: MIT
@@ -81,12 +54,10 @@ contract FlashLoanReceiver {
 ```
 ## Writing an Echidna Test
 
+ we’ll write a property that checks if the receiver's balance is always >= 10 ether. If the balance falls below this threshold, Echidna will report a failure.
 
-To test the FlashLoanReceiver contract, we’ll write a property that checks if the receiver's balance is always >= 10 ether. If the balance falls below this threshold, Echidna will report a failure.
-
-Echidna Test Contract
-solidity
-Copy
+## Echidna Test Contract
+```solidity
 pragma solidity ^0.8.0;
 
 import "./NaiveReceiverLenderPool.sol";
@@ -121,16 +92,19 @@ contract NaiveReceiverEchidna {
         return address(receiver).balance >= 10 ether;
     }
 }
-Running Echidna
-Run Echidna on the NaiveReceiverEchidna contract:
+```
 
-```echidna echidna/challenges/NaiveReceiverEchidna.sol --contract NaiveReceiverEchidna --config naivereceiver.yaml```
+## Run Echidna on the NaiveReceiverEchidna contract:
+
+```echidna echidna/challenges/NaiveReceiverEchidna.sol --contract NaiveReceiverEchidna --config naivereceiver.yaml
+```
 
 ## Output
 
 Echidna will output something like this:
 
-```Analyzing contract: /path/to/NaiveReceiverEchidna.sol:NaiveReceiverEchidna
+```
+Analyzing contract: /path/to/NaiveReceiverEchidna.sol:NaiveReceiverEchidna
 echidna_test_contract_balance: failed!💥  
   Call sequence:
     NaiveReceiverEchidna.testFlashLoan()
@@ -143,7 +117,8 @@ Corpus size: 4
 Seed: 1596810450091279771
 Total calls: 404
 Fixing the Vulnerability
-To fix the vulnerability, we’ll restrict flash loan calls to the owner of the FlashLoanReceiver contract.```
+To fix the vulnerability, we’ll restrict flash loan calls to the owner of the FlashLoanReceiver contract.
+```
 
 Fixed FlashLoanReceiver Contract
 ```solidity
@@ -187,12 +162,13 @@ contract FlashLoanReceiver {
 
     // Allow deposits of ETH
     receive () external payable {}
-}```
+}
+```
 
-Re-running Echidna
-After applying the fix, re-run Echidna:
+## After applying the fix, re-run Echidna:
 
-```echidna echidna/challenges/NaiveReceiverEchidna.sol --contract NaiveReceiverEchidna --config naivereceiver.yaml```
+```echidna echidna/challenges/NaiveReceiverEchidna.sol --contract NaiveReceiverEchidna --config naivereceiver.yaml
+```
 
 ## Output
 
@@ -205,7 +181,8 @@ Unique instructions: 1023
 Unique codehashes: 3
 Corpus size: 10
 Seed: 2821571204059176920
-Total calls: 50263```
+Total calls: 50263
+```
 
 we used Echidna to:
 
